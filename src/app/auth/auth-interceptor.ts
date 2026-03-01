@@ -1,0 +1,49 @@
+import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
+import { inject } from '@angular/core';
+import { AuthService } from './auth.service';
+import { catchError, switchMap, throwError, of } from 'rxjs';
+
+export const AuthInterceptor: HttpInterceptorFn = (req, next) => {
+  const auth = inject(AuthService);
+  const token = auth.getAccessToken();
+
+  if (token) {
+    req = req.clone({
+      setHeaders: { Authorization: `Bearer ${token}` }
+    });
+  }
+
+  return next(req).pipe(
+    catchError((err: HttpErrorResponse) => {
+
+      // CASO 1: Rutas que NO deben reintentar → evita bucle infinito
+      if (req.url.includes('/refresh') || req.url.includes('/login') || req.url.includes('/logout')) {
+        return auth.logout().pipe(
+          catchError(() => of(null)),
+          switchMap(() => throwError(() => err))
+        );
+      }
+
+      // CASO 2: Error 401 estándar → intentar refresh
+      if (err.status === 401) {
+        return auth.refreshToken().pipe(
+          switchMap((res) => {
+            const newToken = res.access_token;
+            const retryReq = req.clone({
+              setHeaders: { Authorization: `Bearer ${newToken}` }
+            });
+            return next(retryReq);
+          }),
+          catchError((refreshErr) => {
+            return auth.logout().pipe(
+              catchError(() => of(null)),
+              switchMap(() => throwError(() => refreshErr))
+            );
+          })
+        );
+      }
+
+      return throwError(() => err);
+    })
+  );
+};

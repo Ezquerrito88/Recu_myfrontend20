@@ -1,0 +1,13 @@
+<div class="container">
+  <h2>Mi Perfil</h2>
+
+  @if (user$ | async; as user) {
+    <div>
+      <p><strong>Nombre:</strong> {{ user.name }}</p>
+      <p><strong>Email:</strong> {{ user.email }}</p>
+      <button (click)="logout()">Cerrar sesión</button>
+    </div>
+  } @else {
+    <p>Cargando perfil...</p>
+  }
+</div>
